@@ -7,9 +7,9 @@
  * "Reload desktop plugins". Plain ESM, loaded uncompiled.
  *
  * A pane docked below the conversation. While the solver is choosing,
- * the LEDs light one by one, slowly (pure CSS, one LED per enabled
- * intent from the backend). The winner stays lit and is named in large
- * text for a few seconds, then everything fades back to idle.
+ * the LEDs light one by one, slowly, in yellow (pure CSS, one LED per
+ * enabled intent from the backend). The winner turns green and is named
+ * in large text for a few seconds, then the pane clears itself.
  * The LLM thinking afterwards never touches the LEDs.
  */
 
@@ -24,6 +24,9 @@ const FRESH_MS = 20000
 const STEP_MS = 450
 
 const CYCLE_CSS = '@keyframes jpl-cycle{0%,100%{opacity:.2}15%{opacity:1}}'
+const DOT_ON = 'var(--ui-accent, #eab308)'
+const DOT_IDLE = 'var(--ui-text-quaternary)'
+const DOT_WIN = 'var(--ui-success, #22c55e)'
 
 const statusAtom = atom({ last: null, enabled: [], trace_count: 0, backend: false })
 const turn = { active: false, start: 0 }
@@ -73,6 +76,12 @@ function RoulettePane() {
   const dots = status.enabled.length > 0 ? status.enabled : ['fast-path']
   const period = (dots.length * STEP_MS) / 1000
 
+  // The pane clears itself: idle with nothing fresh to show renders nothing.
+  const lastAge = status.last && status.last.ts ? now - Date.parse(status.last.ts) : Infinity
+  if (!spinning && !showWinner && (Number.isNaN(lastAge) || lastAge > FRESH_MS)) {
+    return jsx('div', { className: 'h-full w-full' })
+  }
+
   let headline
   if (showWinner) headline = `${winner.id}  ·  ${winner.outcome} (${winner.latency} ms)`
   else if (spinning) headline = 'solver is choosing…'
@@ -96,8 +105,8 @@ function RoulettePane() {
                 height: '14px',
                 borderRadius: '9999px',
                 background: showWinner
-                  ? (id === winner.id ? 'var(--ui-accent)' : 'var(--ui-text-quaternary)')
-                  : 'var(--ui-accent)',
+                  ? (id === winner.id ? DOT_WIN : DOT_IDLE)
+                  : (spinning ? DOT_ON : DOT_IDLE),
                 opacity: showWinner ? 1 : undefined,
                 animation: spinning ? `jpl-cycle ${period}s linear infinite` : 'none',
                 animationDelay: spinning ? `${-(i * STEP_MS) / 1000}s` : '0s'
