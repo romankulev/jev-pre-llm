@@ -134,10 +134,10 @@ the plugin `id`), then ⌘K → Reload desktop plugins.
   from `decisions.jsonl`, the trace count, and the enabled intent list.
   The pane polls it every 3s (`ctx.rest`; polling kept because `ctx.socket`
   is a no-op on OAuth remotes): while the solver is choosing, one LED per
-  intent lights up in slow rotation (~450 ms per LED); a fresh
-  `short_circuit` or `would_short_circuit` freezes the winner solid and names
-  it for 5 seconds, then everything fades to idle. The LLM thinking afterwards
-  never touches the LEDs.
+  intent lights up in slow rotation (~450 ms per LED, yellow); a fresh
+  `short_circuit` or `would_short_circuit` freezes the winner solid green
+  and names it for 5 seconds, then the pane clears itself. The LLM thinking
+  afterwards never touches the LEDs.
 
 ## Intent miner (self-learning)
 
