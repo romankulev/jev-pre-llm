@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import jpl.runtime as RT
 from jpl.loader import HandlerSpec
+from jpl.text import _strip_hermes_suffix
 from jpl.types import Decision
 
 
@@ -50,6 +51,14 @@ def _run_with(rt, stub, **kw):
                              api_mode="chat_completions", **kw)
     finally:
         RT.classify = real
+
+
+def test_suffix_order_bug():
+    # Live case: user text + memory block + Jev suggestion must reduce to the request.
+    mem = ("\n\n<memory-context>\n[System note: blah, see https://example.com/x.\n\n</memory-context>")
+    jev = "\n\n[Jev skill suggestion] `x` looks relevant."
+    text = "чекни тг" + mem + jev
+    assert _strip_hermes_suffix(text) == "чекни тг"
 
 
 def test_shadow_returns_llm_answer():

@@ -21,11 +21,13 @@ _JEV_SUGGESTION_MARKER = "\n\n[Jev skill suggestion]"
 
 
 def _strip_hermes_suffix(text: str) -> str:
-    marker = text.find(_MEMORY_CONTEXT_SENTINEL)
-    if marker >= 0 and text.rstrip().endswith("</memory-context>"):
-        text = text[:marker]
+    # Order matters: the harness appends the Jev suggestion AFTER the memory
+    # block, so cutting memory first would miss (it is no longer the tail).
     marker = text.find(_JEV_SUGGESTION_MARKER)
     if marker >= 0:
+        text = text[:marker]
+    marker = text.find(_MEMORY_CONTEXT_SENTINEL)
+    if marker >= 0 and text.rstrip().endswith("</memory-context>"):
         text = text[:marker]
     return text
 
