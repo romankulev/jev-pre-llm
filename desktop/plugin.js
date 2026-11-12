@@ -60,9 +60,21 @@ function pollStatus(ctx) {
   )
 }
 
+function gwLabel(gw, profile) {
+  try {
+    if (gw && typeof gw === 'object') return gw.name || gw.id || gw.label || '?'
+    if (typeof gw === 'string' && gw) return gw
+    if (profile && typeof profile === 'string') return profile
+    return '?'
+  } catch {
+    return '?'
+  }
+}
+
 function RoulettePane() {
   const busy = useValue(host.state.busy)
   const status = useValue(statusAtom)
+  const gwName = gwLabel(useValue(host.state.gateway), useValue(host.state.focusedSessionProfile))
 
   if (busy && !turn.active) {
     turn.active = true
@@ -88,6 +100,7 @@ function RoulettePane() {
   else if (spinning) headline = 'solver is choosing…'
   else if (status.backend) headline = `idle — ${status.trace_count} traced turns`
   else headline = 'idle — backend unreachable'
+  if (gwName !== '?') headline = `${gwName} · ${headline}`
 
   return jsxs('div', {
     className: 'flex h-full flex-col justify-center gap-2 px-4 py-2',
