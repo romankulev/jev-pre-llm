@@ -1,0 +1,26 @@
+name: jev-pre-llm
+version: "0.1.0"
+description: "Cheap intent decisions before the LLM: solver picks, code runs, else falls through"
+author: "Roman"
+license: MIT
+manifest_version: 1
+api_version: 1
+kind: standalone
+provides_tools: []
+provides_hooks: []
+provides_middleware:
+  - llm_execution
+requires_hermes: ">=0.21.3"
+requires_env:
+  - JEV_PRE_LLM_API_KEY
+python_dependencies: []
+tags:
+  - jev
+  - fast-path
+  - intents
+config_schema:
+  mode: {type: str, default: shadow, description: "off, shadow, or active"}
+  timeout_seconds: {type: float, default: 3.0, description: "Solver request timeout"}
+  handler_timeout_seconds: {type: float, default: 120.0, description: "Handler code timeout"}
+  max_input_chars: {type: int, default: 4000, description: "Maximum candidate input length"}
+  enabled_handlers: {type: list, default: [], description: "Handler IDs from handlers/ dir"}
