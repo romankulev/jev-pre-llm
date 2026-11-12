@@ -91,6 +91,8 @@ __init__.py            directory-plugin entrypoint (exposes register)
 jpl/                   core: gate → text → solver → loader → runtime
 jpl/tg.py              shared Telegram access, injected as ctx["tg"]
 jpl/recorder.py        post_llm_call trace observer for the miner
+jpl/status.py          read-only status for the LED backend (tested)
+dashboard/             LED backend: plugin_api.py + manifest.json
 miner/scan.py          repeats → TODO-skeleton drafts
 miner/write.py         writer-backed draft synthesis
 telegram_fetch.py      Telegram fetch via Telethon (same session as the MCP)
@@ -127,11 +129,13 @@ the plugin `id`), then ⌘K → Reload desktop plugins.
 - v1 (no backend needed): the LED follows turn atoms — dim when idle, pulsing
   while the focused chat is working. It shows that *a* turn is running, not
   yet which path it took.
-- v2 (planned): the Python backend (`dashboard/plugin_api.py`) pushes
-  `jev-pre-llm/decision` events over `ctx.socket` — `classifying` (amber
-  pulse), `short_circuit:<id>` (green flash naming the intent), `fallback`
-  (fade back to idle). The LED subscribes with `host.onEvent`, keeping the
-  atom-based pulse as fallback when the socket is unavailable (OAuth remotes).
+- v2 (implemented): the Python backend (`dashboard/plugin_api.py`, auto-mounted
+  at `/api/plugins/jev-pre-llm/` via `dashboard/manifest.json`) serves
+  `GET status` — the last decision tailed from `decisions.jsonl` plus the
+  trace size. The LED polls it every 5s (`ctx.rest`, polling fallback kept
+  because `ctx.socket` is a no-op on OAuth remotes): a fresh `short_circuit`
+  or `would_short_circuit` lights the dot solid and names the intent in the
+  tooltip. This makes `shadow` mode visible — exactly what live testing needs.
 
 ## Intent miner (self-learning)
 

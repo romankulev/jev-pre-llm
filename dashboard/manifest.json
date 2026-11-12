@@ -1,0 +1,1 @@
+{"api": "plugin_api.py", "description": "Read-only fast-path status for the desktop LED.", "name": "jev-pre-llm", "version": "0.1.0"}
