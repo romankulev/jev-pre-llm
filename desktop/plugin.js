@@ -28,6 +28,7 @@ const DOT_ON = 'var(--ui-accent, #eab308)'
 const DOT_IDLE = 'var(--ui-text-quaternary)'
 const DOT_WIN = 'var(--ui-success, #22c55e)'
 
+const FALLBACK_ENABLED = ['check_tg', 'tg_person', 'fp_status']
 const statusAtom = atom({ last: null, enabled: [], trace_count: 0, backend: false })
 const turn = { active: false, start: 0 }
 const winner = { id: null, outcome: null, latency: 0, ts: 0 }
@@ -73,7 +74,7 @@ function RoulettePane() {
   const now = Date.now()
   const showWinner = winner.id && (now - winner.ts) < WINNER_MS
   const spinning = turn.active && !showWinner && (now - turn.start) < ROULETTE_MS
-  const dots = status.enabled.length > 0 ? status.enabled : ['fast-path']
+  const dots = status.enabled.length > 0 ? status.enabled : FALLBACK_ENABLED
   const period = (dots.length * STEP_MS) / 1000
 
   // The pane clears itself: idle with nothing fresh to show renders nothing.
