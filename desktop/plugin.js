@@ -29,9 +29,24 @@ const DOT_IDLE = 'var(--ui-text-quaternary)'
 const DOT_WIN = 'var(--ui-success, #22c55e)'
 
 const FALLBACK_ENABLED = ['check_tg', 'tg_person', 'fp_status']
-const statusAtom = atom({ last: null, enabled: [], trace_count: 0, backend: false })
+const statusAtom = atom({ last: null, enabled: [], trace_count: 0, backend: false, gw: '' })
 const turn = { active: false, start: 0 }
 const winner = { id: null, outcome: null, latency: 0, ts: 0 }
+
+// Gateway name is read OUTSIDE the render path: a missing atom must never
+// crash the pane. Plain string, safe to render.
+function readGw() {
+  try {
+    const g = host.state.gateway.get()
+    if (g && typeof g === 'object') return g.name || g.id || g.label || ''
+    if (typeof g === 'string') return g
+  } catch { /* host without gateway atom */ }
+  try {
+    const p = host.state.focusedSessionProfile.get()
+    if (typeof p === 'string') return p
+  } catch { /* host without profile atom */ }
+  return ''
+}
 
 function pollStatus(ctx) {
   ctx.rest('/status', { timeoutMs: 4000 }).then(
@@ -41,7 +56,8 @@ function pollStatus(ctx) {
         last: data.last || null,
         enabled: Array.isArray(data.enabled) ? data.enabled : [],
         trace_count: data.trace_count || 0,
-        backend: true
+        backend: true,
+        gw: readGw()
       })
       const last = data.last
       if (last && last.ts && last.selected_handler && turn.start > 0) {
@@ -60,21 +76,25 @@ function pollStatus(ctx) {
   )
 }
 
-function gwLabel(gw, profile) {
+function RoulettePane() {
   try {
-    if (gw && typeof gw === 'object') return gw.name || gw.id || gw.label || '?'
-    if (typeof gw === 'string' && gw) return gw
-    if (profile && typeof profile === 'string') return profile
-    return '?'
-  } catch {
-    return '?'
+    return RouletteInner()
+  } catch (err) {
+    return jsx('div', {
+      className: 'flex h-full flex-col justify-center gap-2 px-4 py-2',
+      children: jsx('div', {
+        className: 'text-xs text-(--ui-text-secondary)',
+        children: `roulette render error: ${(err && err.message) || err}`
+      })
+    })
   }
 }
 
-function RoulettePane() {
+function RouletteInner() {
   const busy = useValue(host.state.busy)
-  const status = useValue(statusAtom)
-  const gwName = gwLabel(useValue(host.state.gateway), useValue(host.state.focusedSessionProfile))
+  const status = useValue(statusAtom) || {}
+  const enabled = Array.isArray(status.enabled) ? status.enabled : []
+  const gwName = typeof status.gw === 'string' ? status.gw : ''
 
   if (busy && !turn.active) {
     turn.active = true
@@ -86,7 +106,7 @@ function RoulettePane() {
   const now = Date.now()
   const showWinner = winner.id && (now - winner.ts) < WINNER_MS
   const spinning = turn.active && !showWinner && (now - turn.start) < ROULETTE_MS
-  const dots = status.enabled.length > 0 ? status.enabled : FALLBACK_ENABLED
+  const dots = enabled.length > 0 ? enabled : FALLBACK_ENABLED
   const period = (dots.length * STEP_MS) / 1000
 
   // The pane clears itself: idle with nothing fresh to show renders nothing.
@@ -100,7 +120,7 @@ function RoulettePane() {
   else if (spinning) headline = 'solver is choosing…'
   else if (status.backend) headline = `idle — ${status.trace_count} traced turns`
   else headline = 'idle — backend unreachable'
-  if (gwName !== '?') headline = `${gwName} · ${headline}`
+  if (gwName) headline = `${gwName} · ${headline}`
 
   return jsxs('div', {
     className: 'flex h-full flex-col justify-center gap-2 px-4 py-2',
