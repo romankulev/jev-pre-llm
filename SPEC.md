@@ -6,8 +6,11 @@ executes it, otherwise the turn quietly falls through to the regular LLM.
 
 ## How a turn flows
 
-1. Only the first invocation of a `(session_id, turn_id)` pair counts —
-   retries and fallbacks re-delivering the same turn go to the LLM.
+1. Claim-once per turn: the gateway may deliver the same turn to the
+   middleware more than once (retries, fallback re-delivery). The plugin
+   handles only the first delivery of a `(session_id, turn_id)` pair and
+   lets every repeat fall through to the LLM — so a handler never runs
+   twice and the solver is never paid twice for one turn.
 2. The latest user text is extracted. `/` commands, code fences, links —
    straight to the LLM.
 3. Safety gate: secrets, shell metacharacters, destructive verbs
