@@ -1,15 +1,15 @@
-"""Шаблон нового интента. Файлы на _ loader игнорирует.
+"""New-intent template. The loader ignores files starting with _.
 
-Стандарт (все пункты обязательны):
-  HANDLER_ID — уникальный id латиницей с подчёркиваниями, равен имени файла.
-  PATTERNS   — список regex для документации и самопроверки.
-  CRITERIA   — одна строка для решателя: когда срабатывать.
-               Пиши отличие от соседних интентов, иначе решатель их путает.
-  run(text, ctx) -> str — только ЧТЕНИЕ и вычисления. Отправок, удалений,
-               оплат, рестартов тут не бывает: safety-гейт такие фразы режет
-               до решателя. Не получилось — raise ValueError, ход уйдёт в LLM.
-  REWRITE (необязательно) — одна строка: как дешёвой модели пересказать
-               сырой ответ. Ошибка рерайта — вернётся сырой текст.
+Standard (every item required):
+  HANDLER_ID — unique lowercase-latin id with underscores, equals the file name.
+  PATTERNS   — regex list for documentation and self-checks.
+  CRITERIA   — one line for the solver: when to fire.
+               Write how it differs from sibling intents, or the solver mixes them up.
+  run(text, ctx) -> str — READS and computation only. No sends, deletes,
+               payments, or restarts here: the safety gate cuts such phrases
+               before the solver. On failure raise ValueError, the turn falls to the LLM.
+  REWRITE (optional) — one line: how a cheap model should restyle the raw answer.
+               A rewrite failure returns the raw text.
 """
 
 from __future__ import annotations
@@ -21,24 +21,25 @@ HANDLER_ID = "my_action"
 
 PATTERNS = [re.compile(r"my trigger", re.IGNORECASE)]
 
-# Примеры для самопроверки. В рантайме НЕ участвуют (решатель видит все
-# включённые интенты каждый раз) — их гоняет tests/test_registry.py:
-# каждый MUST_MATCH обязан цепляться хотя бы за один PATTERNS,
-# каждый MUST_MISS — ни за один. Расхождение = врёт либо пример, либо паттерн.
+# Self-check examples. They do NOT take part in runtime (the solver sees all
+# enabled intents every turn) — tests/test_registry.py runs them:
+# every MUST_MATCH must catch on at least one PATTERNS entry,
+# every MUST_MISS must catch on none. A mismatch means the example or the
+# pattern is lying.
 MUST_MATCH = [
-    "пример фразы, где решатель должен выбрать этот интент",
+    "example phrase where the solver should pick this intent",
 ]
 
 MUST_MISS = [
-    "пример фразы, где решатель должен выбрать normal_llm или соседний интент",
+    "example phrase where the solver should pick normal_llm or a sibling intent",
 ]
 
-CRITERIA = "Когда срабатывать: одно предложение, отличие от соседних интентов."
+CRITERIA = "When to fire: one sentence, how it differs from sibling intents."
 
-# REWRITE = "Как пересказать сырой ответ коротко и по делу."
+# REWRITE = "How to restyle the raw answer, short and to the point."
 
 
 def run(text: str, ctx: Mapping) -> str:
-    # ctx: handler_timeout (сек), status (mode, enabled_handlers...).
-    # Долго — подпроцессом с timeout, тихо падать — ValueError.
+    # ctx: handler_timeout (seconds), status (mode, enabled_handlers...).
+    # Slow work goes to a subprocess with a timeout; fail quietly with ValueError.
     raise ValueError("not implemented")

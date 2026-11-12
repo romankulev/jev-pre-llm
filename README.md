@@ -1,6 +1,9 @@
 # jev-pre-llm
 
-Дешёвое решение до дорогой LLM: решатель (Jev или замена) выбирает интент,
-локальный код исполняет, иначе ход уходит в обычную LLM.
+Cheap decisions before the expensive LLM: a solver (Jev or a replacement)
+picks an intent, local code executes it, otherwise the turn quietly falls
+through to the regular LLM.
 
-Правила — в [SPEC.md](SPEC.md). Новый интент — копия `handlers/_template.py`.
+Rules live in [SPEC.md](SPEC.md). A new intent is a copy of
+`handlers/_template.py`. User intents that survive updates go to
+`~/.hermes/jev-intents` (see `handlers_dir` in `plugin.yaml`).

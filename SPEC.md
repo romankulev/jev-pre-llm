@@ -1,102 +1,154 @@
-# jev-pre-llm — классификация намерений до LLM
+# jev-pre-llm — intent classification before the LLM
 
-Плагин Hermes (`llm_execution` middleware): дешёвое решение до дорогой LLM.
-Jev (или другая модель-решатель) выбирает интент, локальный код исполняет,
-иначе ход тихо уходит в обычную LLM.
+A Hermes plugin (`llm_execution` middleware): a cheap decision ahead of the
+expensive LLM. Jev (or another solver model) picks an intent, local code
+executes it, otherwise the turn quietly falls through to the regular LLM.
 
-## Как работает ход
+## How a turn flows
 
-1. Только первое срабатывание пары `(session_id, turn_id)` — повторы и ретраи идут в LLM.
-2. Извлекается текст пользователя. Команды на `/`, код, ссылки — сразу в LLM.
-3. Safety-гейт: секреты, shell-символы, деструктивные глаголы
-   (удали/отправь/оплати/перезапусти...) — всегда в LLM, хендлеры их не видят.
-4. Всем включённым хендлерам отдаётся список `id + CRITERIA`, решатель
-   возвращает один `id` или `normal_llm`. Принято только точное совпадение
-   id + явный go-флаг, иначе — в LLM. Решатель не исполняет, только выбирает.
-5. `run(text, ctx)` выполняется с таймаутом. Исключение или пустой ответ — в LLM.
-6. Режимы: `off` (выкл), `shadow` (решает и пишет в телеметрию, ответ даёт LLM),
-   `active` (при совпадении отвечает без вызова LLM).
+1. Only the first invocation of a `(session_id, turn_id)` pair counts —
+   retries and fallbacks re-delivering the same turn go to the LLM.
+2. The latest user text is extracted. `/` commands, code fences, links —
+   straight to the LLM.
+3. Safety gate: secrets, shell metacharacters, destructive verbs
+   (delete/send/pay/restart and equivalents) — always to the LLM, handlers
+   never see them.
+4. Every enabled handler contributes `id + CRITERIA`; the solver returns one
+   `id` or `normal_llm`. Only an exact id match plus an explicit go-flag is
+   accepted, anything else falls through. The solver never executes, it only
+   picks.
+5. `run(text, ctx)` executes with a timeout. An exception or an empty answer
+   falls through to the LLM.
+6. Modes: `off`, `shadow` (decides and logs to telemetry, the LLM answers),
+   `active` (on a match, answers with zero LLM calls).
 
-## Смена решателя
+## Swapping the solver
 
-Решатель — заменяемый модуль с одним контрактом:
+The solver is a replaceable module with one contract:
 
-- вход: `text`, список `{id, criteria}`;
-- выход: `{id | "normal_llm", confidence, go}`.
+- input: `text`, a list of `{id, criteria}`;
+- output: `{id | "normal_llm", confidence, go}`.
 
-Сейчас: `solver_jev.py` (Jev через OpenRouter). Запасной вариант — любая
-дешёвая LLM с тем же JSON-выходом. Хендлеры и гейты от решателя не зависят.
+Current: `solver_jev.py` (Jev via OpenRouter). Fallback: any cheap LLM with
+the same JSON output. Handlers and gates do not depend on the solver.
 
-## Правила плагина
+## Plugin rules
 
-- Реестр хендлеров валидируется при старте: дубли id, кривой regex/CRITERIA,
-  отсутствие `run` — плагин отключается громко, никогда тихо.
-- Настройки читаются при регистрации (`ctx.get_config` + собственный `.env`
-  как запасной). Смена режима требует перезагрузки гейтвея; доказательство —
-  строка в логе, не файл конфига.
-- Синтетический ответ собирается под активный `api_mode`, иначе нормализация
-  его выкинет.
-- Телеметрия — append-only JSONL, поля обрезаны, без секретов и полных текстов.
-- Начинать новый плагин/интент в `shadow`, читать `decisions.jsonl` на живом
-  трафике, потом переводить в `active`.
+- The handler registry is validated at startup: duplicate ids, broken
+  regex/CRITERIA, a missing `run` disable the plugin loudly, never silently.
+- Settings are read at registration (`ctx.get_config` first, the plugin's own
+  `.env` as fallback). A mode change needs a gateway restart; the proof is the
+  log line, not the config file.
+- Synthetic answers must match the active `api_mode`, or normalization drops
+  them.
+- Telemetry is append-only JSONL with truncated fields — no secrets, no full
+  texts.
+- Start every new plugin/intent in `shadow`, read `decisions.jsonl` on live
+  traffic, then go `active`.
 
-## Правила новых интентов
+## Rules for new intents
 
-Один файл в `handlers/` = один интент. Файлы на `_` игнорируются.
-Обязательно:
+One file in `handlers/` = one intent. Files starting with `_` are ignored.
+Required:
 
-- `HANDLER_ID` — латиница с подчёркиваниями, равен имени файла, уникален.
-- `PATTERNS` — список regex триггерных формулировок. В рантайме НЕ фильтруют
-  (все включённые интенты предлагаются решателю каждый раз — так дешевле
-  и надёжнее при малом реестре, чем ловить русскую морфологию префильтром).
-  Три роли: документация («какие фразы покрывает»), самопроверка через
-  `MUST_MATCH`/`MUST_MISS` в том же файле (тест `tests/test_registry.py`
-  следит, что примеры и паттерны не врут друг другу) и регрессия при
-  добавлении соседа (старые must-match не должны цепляться за новые паттерны).
-  Писать под русскую морфологию: чередования (`чек\w*|провер\w*`), границы
-  слов, частые опечатки автора. Не использовать якоря `^...$` — фраза
-  приходит внутри живого текста.
-- `CRITERIA` — одна строка для решателя. Писать отличие от соседей, а не общее
-  описание («общая сводка непрочитанного» vs «один названный человек»).
-  Пересекающиеся критерии = путаница классификации.
-- `run(text, ctx) -> str` — только чтение и вычисления. Нужна именованная
-  сущность (человек, чат, файл) — извлечь внутри `run`, не извлёк — `raise
-  ValueError`, ход уйдёт в LLM. Не получилось — `raise ValueError`, не пустой
-  выхлоп и не враньё.
+- `HANDLER_ID` — lowercase latin with underscores, equals the file name,
+  unique.
+- `PATTERNS` — a list of trigger-phrase regexes. They do NOT filter at
+  runtime (every enabled intent is offered to the solver on every turn — cheaper
+  and more robust for a small registry than catching morphology with a
+  prefilter). Three roles: documentation ("which phrases this covers"),
+  self-checks via `MUST_MATCH`/`MUST_MISS` in the same file (the
+  `tests/test_registry.py` test keeps examples and patterns honest with each
+  other), and regression when a sibling is added (old must-matches must not
+  catch on new patterns). Write for morphology: alternations
+  (`check|verify|show`), word boundaries, the author's frequent typos. No
+  `^...$` anchors — the phrase arrives inside live text.
+- `CRITERIA` — one line for the solver. State how it differs from its
+  neighbours, not a standalone description ("overall unread summary" vs "one
+  named person"). Overlapping criteria confuse the classifier.
+- `run(text, ctx) -> str` — reads and computation only. An intent needing a
+  named entity (person, chat, file) extracts it inside `run`; on a miss raise
+  `ValueError` and the turn falls through to the LLM. On failure raise
+  `ValueError` — never an empty answer, never a fabrication.
 
-Необязательно: `REWRITE` — одна строка, как дешёвой модели пересказать сырой
-ответ. Ошибка рерайта — отдаётся сырой текст.
+Optional: `REWRITE` — one line telling a cheap model how to restyle the raw
+answer. A rewrite failure returns the raw text.
 
-Самопроверка интента: must-match / must-miss фразы, `/`-команда, деструктивная
-фраза, прогон `run` вживую, один полный проход middleware в `shadow`.
+Intent self-check: must-match / must-miss phrases, a `/` command, a
+destructive phrase, a live `run`, one full middleware pass in `shadow`.
 
-## Структура
+## Layout
 
 ```
-plugin.yaml            манифест (provides_middleware: [llm_execution], v1)
-SPEC.md                этот файл — правила
-solver_jev.py          решатель на Jev (контракт выше)
-pipeline.py            гейт → решатель → run → ответ/телеметрия
-handlers/_template.py  шаблон интента
-handlers/README.md     короткая шпаргалка по интентам
-tests/                 самопроверки реестра и гейта
+plugin.yaml            manifest (provides_middleware: [llm_execution], v1)
+SPEC.md                this file — the rules
+solver_jev.py          Jev-based solver (contract above)
+pipeline.py            gate → solver → run → answer/telemetry
+handlers/_template.py  intent template
+handlers/README.md     intent cheat sheet
+desktop/plugin.js      LED indicator (desktop half, see below)
+drafts/                proposed self-learned intents (see miner section)
+tests/                 registry and gate self-checks
 ```
 
-## Где живут интенты (защита от обновления)
+## Where intents live (update safety)
 
-`hermes plugins update` (и тем более `auto-update`) заменяет каталог плагина
-целиком — файлы, положенные руками внутрь `~/.hermes/plugins/<name>/`,
-затираются. Поэтому загрузка двухуровневая:
+`hermes plugins update` (and especially `auto-update`) replaces the plugin
+directory wholesale — files placed by hand inside `~/.hermes/plugins/<name>/`
+are wiped. Loading is therefore two-tier:
 
-- `handlers/` в репозитории — штатные интенты, версионируются, едут с обновлением;
-- `handlers_dir` (по умолчанию `~/.hermes/jev-intents`) — пользовательские
-  интенты вне плагина, обновление их не трогает. При совпадении id внешний
-  выигрывает. Тот же контракт файла (`HANDLER_ID` = имя файла и т.д.),
-  тот же `tests/test_registry.py` (запуск с путём: `python3 tests/test_registry.py <dir>`).
+- `handlers/` in this repo — stock intents, versioned, ship with updates;
+- `handlers_dir` (default `~/.hermes/jev-intents`) — user intents outside the
+  plugin, updates never touch them. On an id clash the external one wins. Same
+  file contract (`HANDLER_ID` = file name, etc.), same `tests/test_registry.py`
+  (pass a path: `python3 tests/test_registry.py <dir>`).
 
-Правило: руками в каталог установленного плагина — ничего. Своё — либо коммитом
-в репозиторий, либо в `handlers_dir`.
+Rule: never hand-edit the installed plugin directory. Your own stuff goes
+either as a commit to this repo or into `handlers_dir`.
+
+## LED indicator (desktop half)
+
+`desktop/plugin.js` is the desktop half of this unified package: a status-bar
+LED showing fast-path activity. Install it to
+`$HERMES_HOME/desktop-plugins/jev-pre-llm/plugin.js` (folder name must match
+the plugin `id`), then ⌘K → Reload desktop plugins.
+
+- v1 (no backend needed): the LED follows turn atoms — dim when idle, pulsing
+  while the focused chat is working. It shows that *a* turn is running, not
+  yet which path it took.
+- v2 (planned): the Python backend (`dashboard/plugin_api.py`) pushes
+  `jev-pre-llm/decision` events over `ctx.socket` — `classifying` (amber
+  pulse), `short_circuit:<id>` (green flash naming the intent), `fallback`
+  (fade back to idle). The LED subscribes with `host.onEvent`, keeping the
+  atom-based pulse as fallback when the socket is unavailable (OAuth remotes).
+
+## Intent miner (self-learning)
+
+The plugin learns repeatable chores instead of only serving hand-written
+intents. Pipeline: `record → repeat → draft → approve → shadow → enable`.
+
+1. **Record.** A post-turn observer (the `transform_llm_output` hook or a
+   telemetry watcher) stores pairs of (user text, tool-call sequence, result
+   fingerprint) for turns the fast path did NOT handle.
+2. **Repeat.** The solver flags a request it has seen ≥2 times in similar
+   wording. Similarity is judged by the solver, not by string equality.
+3. **Draft.** A cheap writer model synthesizes a handler skeleton from the
+   observed trace — `HANDLER_ID`, `PATTERNS`, `CRITERIA`, `MUST_MATCH` /
+   `MUST_MISS`, and a `run()` replaying the read-only steps — into `drafts/`
+   (same file contract, but the registry never loads that directory).
+4. **Approve.** A draft is never auto-enabled. The user moves it to
+   `handlers/` or `handlers_dir` and adds the id to `enabled_handlers`.
+5. **Shadow, then active.** Same as a hand-written intent: live traffic in
+   `shadow` first.
+
+Hard limits: turns containing send/delete/pay/restart, secrets, or shell
+metacharacters are never drafted, ever. Drafts replay reads and computation
+only. A draft whose `run()` raises goes to the LLM exactly like a normal
+miss. Manual fast track: tell the assistant "remember this" after any good
+answer and it writes the draft immediately instead of waiting for a repeat.
+
+## Verifying the chain before installing
 
 `hermes plugins doctor <name>`, `hermes plugins enable <name>`,
-режим `shadow`, строка `<name> registered` в логе гейтвея,
-`decisions.jsonl` пишет `would_short_circuit`, затем `active`.
+mode `shadow`, the `<name> registered` line in the gateway log,
+`decisions.jsonl` records `would_short_circuit`, then `active`.
