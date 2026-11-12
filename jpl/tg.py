@@ -16,16 +16,16 @@ class TelegramError(ValueError):
     """Telegram fetch failed; the turn falls through to the normal LLM."""
 
 
-def clip(text: str | None, limit: int = 280) -> str:
-    return " ".join((text or "").split())[:limit]
-
-
 class TelegramHelper:
     def __init__(self, plugin_dir: Path | str, handler_timeout: float = 120.0):
         self._plugin_dir = Path(plugin_dir)
         self._timeout = float(handler_timeout)
         self._env_file: Path | None = None
         self._env_searched = False
+
+    @staticmethod
+    def clip(text: str | None, limit: int = 160) -> str:
+        return " ".join((text or "").split())[:limit]
 
     def _venv_python(self) -> Path:
         return Path.home() / "mcp-services" / "telegram-mcp" / ".venv" / "bin" / "python"
@@ -65,7 +65,7 @@ class TelegramHelper:
         """Run the fetch subprocess and return its parsed JSON."""
         scratch = Path.home() / ".hermes" / "cache" / "scratch" / scratch_name
         cmd = [
-            str(self._venv_python()), str(self._script),
+            str(self._venv_python()), str(self._script()),
             "--env", str(self.env_file()),
             "--out", str(scratch),
             "--max-chats", str(max_chats), "--limit", str(limit),

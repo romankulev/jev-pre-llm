@@ -319,7 +319,9 @@ class FastPathRuntime:
             future = _POOL.submit(spec.run, text, handler_ctx)
             answer = future.result(timeout=self.settings.handler_timeout_seconds)
         except Exception as exc:
-            reason = "handler_declined" if isinstance(exc, HandlerDeclined) else type(exc).__name__
+            base = "handler_declined" if isinstance(exc, HandlerDeclined) else type(exc).__name__
+            detail = str(exc).replace("\n", " ")[:100]
+            reason = f"{base}: {detail}" if detail else base
             self._emit(
                 TelemetryEvent(
                     outcome="normal_llm", reason=reason, text=text,

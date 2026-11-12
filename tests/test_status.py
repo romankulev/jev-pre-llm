@@ -47,7 +47,7 @@ def test_reads_last_decision():
 
 def test_missing_files():
     out = read_status(Path(tempfile.mkdtemp()))
-    assert out == {"ok": True, "last": None, "trace_count": 0}
+    assert out == {"ok": True, "last": None, "trace_count": 0, "enabled": []}
 
 
 def test_never_raises():
@@ -56,8 +56,36 @@ def test_never_raises():
     assert out["ok"] is False
 
 
+def test_enabled_from_manifest():
+    home = _home_with([], 0)
+    out = read_status(home, plugin_dir=Path(__file__).resolve().parent.parent)
+    assert out["enabled"] == ["check_tg", "tg_person", "fp_status"], out["enabled"]
+
+
+def test_enabled_env_override():
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        plug = Path(tmp)
+        (plug / "plugin.yaml").write_text(
+            "config_schema:\n  enabled_handlers: {type: list, default: [a, b]}\n",
+            encoding="utf-8",
+        )
+        assert _enabled(plug) == ["a", "b"]
+        (plug / ".env").write_text("JPL_ENABLED_HANDLERS=b,c\n", encoding="utf-8")
+        assert _enabled(plug) == ["b", "c"]
+
+
+def _enabled(plug: Path) -> list:
+    from jpl.status import _enabled_from_plugin_dir
+
+    return _enabled_from_plugin_dir(plug)
+
+
 if __name__ == "__main__":
     test_reads_last_decision()
     test_missing_files()
     test_never_raises()
+    test_enabled_from_manifest()
+    test_enabled_env_override()
     print("OK: status")

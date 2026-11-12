@@ -25,7 +25,8 @@ def _read_status() -> dict:
     spec.loader.exec_module(module)
     from hermes_constants import get_hermes_home
 
-    return module.read_status(get_hermes_home())
+    plugin_dir = Path(__file__).resolve().parent.parent
+    return module.read_status(get_hermes_home(), plugin_dir=plugin_dir)
 
 
 @router.get("/status")
