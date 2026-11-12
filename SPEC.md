@@ -139,6 +139,20 @@ intents. Pipeline: `record → repeat → draft → approve → shadow → enabl
    observed trace — `HANDLER_ID`, `PATTERNS`, `CRITERIA`, `MUST_MATCH` /
    `MUST_MISS`, and a `run()` replaying the read-only steps — into `drafts/`
    (same file contract, but the registry never loads that directory).
+
+### Writer backend: your subscription, no new key
+
+Draft synthesis is an ordinary OpenAI-compatible chat call, not an agent
+runtime. Upstream order:
+
+1. Local `hermes proxy` (`hermes proxy start`, default
+   `http://127.0.0.1:8645/v1`) — spends your existing subscription/OAuth
+   (Nous Portal, xAI Grok OAuth), no API key to obtain or store. Settings:
+   `writer_base_url`, `writer_model` (any model your subscription serves).
+2. The solver's own key (OpenRouter today) — zero new secrets either way.
+
+This mirrors Hindsight memory: background extraction runs through the
+user's own OAuth, not a separate billing key.
 4. **Approve.** A draft is never auto-enabled. The user moves it to
    `handlers/` or `handlers_dir` and adds the id to `enabled_handlers`.
 5. **Shadow, then active.** Same as a hand-written intent: live traffic in
