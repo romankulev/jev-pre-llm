@@ -90,6 +90,9 @@ SPEC.md                this file — the rules
 __init__.py            directory-plugin entrypoint (exposes register)
 jpl/                   core: gate → text → solver → loader → runtime
 jpl/tg.py              shared Telegram access, injected as ctx["tg"]
+jpl/recorder.py        post_llm_call trace observer for the miner
+miner/scan.py          repeats → TODO-skeleton drafts
+miner/write.py         writer-backed draft synthesis
 telegram_fetch.py      Telegram fetch via Telethon (same session as the MCP)
 handlers/              stock intents (check_tg, tg_person, fp_status)
 handlers/_template.py  intent template
@@ -132,22 +135,30 @@ the plugin `id`), then ⌘K → Reload desktop plugins.
 
 ## Intent miner (self-learning)
 
-Status: the offline scanner (`miner/scan.py`, tested) is done; the live
-recorder hook that appends unhandled-turn traces is pending a gateway
-restart window. Until then, traces can be fed to the scanner by hand.
+Status: the offline scanner (`miner/scan.py`, tested) and the writer client
+(`miner/write.py`, tested against a fake server) are done; the live recorder
+hook is coded (`jpl/recorder.py`, pure observer on `post_llm_call`) but loads
+only after a gateway restart. Until then, traces can be fed to the scanner
+by hand.
 
 The plugin learns repeatable chores instead of only serving hand-written
 intents. Pipeline: `record → repeat → draft → approve → shadow → enable`.
 
-1. **Record.** A post-turn observer (the `transform_llm_output` hook or a
-   telemetry watcher) stores pairs of (user text, tool-call sequence, result
-   fingerprint) for turns the fast path did NOT handle.
-2. **Repeat.** The solver flags a request it has seen ≥2 times in similar
-   wording. Similarity is judged by the solver, not by string equality.
-3. **Draft.** A cheap writer model synthesizes a handler skeleton from the
-   observed trace — `HANDLER_ID`, `PATTERNS`, `CRITERIA`, `MUST_MATCH` /
-   `MUST_MISS`, and a `run()` replaying the read-only steps — into `drafts/`
+1. **Record.** A `post_llm_call` observer (`jpl/recorder.py`) appends one
+   JSONL record per unhandled turn to `plugin-data/jev-pre-llm/trace.jsonl`:
+   user text, tool-call NAMES (never arg values), a 200-char result hint.
+   Turns the fast path short-circuited are marked and skipped. Unknown
+   payload shapes and any failure are silent no-ops; the hook returns None
+   and never rewrites.
+2. **Repeat.** `miner/scan.py` groups eligible records by (normalized text,
+   tool signature) and flags groups seen ≥2 times. Similarity is normalized
+   text, not string equality («отчёт»/«отчет» match).
+3. **Draft.** `miner/write.py` asks the writer model for the intent fields
+   (HANDLER_ID, PATTERNS, CRITERIA, MUST lists, read-only `run()` replaying
+   the observed trace) and writes the file into `drafts/`
    (same file contract, but the registry never loads that directory).
+   Writer failure falls back to the TODO skeleton from `miner/scan.py` —
+   a bad draft never blocks the miner.
 
 ### Writer backend: your subscription, no new key
 

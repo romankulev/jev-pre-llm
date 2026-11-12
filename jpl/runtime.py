@@ -22,6 +22,7 @@ from typing import Any, Callable, Mapping
 
 from .gate import detect_candidates
 from .loader import HandlerDeclined, HandlerSpec, load_handlers
+from .recorder import Recorder
 from .responses import build_synthetic_response
 from .solver import SolverError, classify, rewrite_text
 from .telemetry import TelemetryWriter
@@ -206,6 +207,7 @@ class FastPathRuntime:
             Path(__file__).resolve().parent.parent,
             handler_timeout=settings.handler_timeout_seconds,
         )
+        self._recorder: Recorder | None = None
 
     def status(self) -> dict[str, Any]:
         with self._status_lock:
@@ -359,6 +361,11 @@ class FastPathRuntime:
             )
             return downstream()
         response = build_synthetic_response(api_mode, answer)
+        if self._recorder is not None:
+            try:
+                self._recorder.mark_handled(session_id, turn_id)
+            except Exception:
+                pass
         self._emit(
             TelemetryEvent(
                 outcome="short_circuit", reason="accepted", text=text,
@@ -404,6 +411,13 @@ def register(ctx) -> None:
         ",".join(sorted(registry)), settings.handlers_dir,
     )
     ctx.register_middleware("llm_execution", runtime.middleware)
+    # Post-turn trace recorder for the miner: pure observer, never rewrites.
+    try:
+        recorder = Recorder(Path(get_hermes_home()) / "plugin-data" / "jev-pre-llm" / "trace.jsonl")
+        runtime._recorder = recorder
+        ctx.register_hook("post_llm_call", recorder)
+    except Exception as exc:
+        logger.warning("jev-pre-llm recorder not wired: %s", type(exc).__name__)
     logger.info(
         "jev-pre-llm registered llm_execution middleware (mode=%s, handlers=%s)",
         settings.mode, ",".join(settings.enabled_handlers),

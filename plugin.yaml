@@ -7,7 +7,8 @@ manifest_version: 1
 api_version: 1
 kind: standalone
 provides_tools: []
-provides_hooks: []
+provides_hooks:
+  - post_llm_call
 provides_middleware:
   - llm_execution
 requires_hermes: ">=0.21.3"
