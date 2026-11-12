@@ -132,6 +132,10 @@ the plugin `id`), then ⌘K → Reload desktop plugins.
 
 ## Intent miner (self-learning)
 
+Status: the offline scanner (`miner/scan.py`, tested) is done; the live
+recorder hook that appends unhandled-turn traces is pending a gateway
+restart window. Until then, traces can be fed to the scanner by hand.
+
 The plugin learns repeatable chores instead of only serving hand-written
 intents. Pipeline: `record → repeat → draft → approve → shadow → enable`.
 
