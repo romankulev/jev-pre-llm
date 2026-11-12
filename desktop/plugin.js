@@ -151,10 +151,10 @@ export default {
     pollStatus(ctx)
     setInterval(() => pollStatus(ctx), POLL_MS)
     ctx.register({
-      id: 'pane',
+      id: 'roulette',
       area: 'panes',
       title: 'intent roulette',
-      data: { placement: 'bottom', dock: { pane: 'workspace', pos: 'bottom' }, height: '132px' },
+      data: { placement: 'bottom', dock: { pane: 'workspace', pos: 'bottom', enforce: true }, height: '132px' },
       render: () => jsx(RoulettePane, {})
     })
   }
