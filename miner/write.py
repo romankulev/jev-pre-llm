@@ -51,9 +51,15 @@ def synthesize(
     *,
     base_url: str,
     model: str,
+    api_key: str = "hermes-proxy",
     timeout: float = 60.0,
 ) -> dict[str, Any]:
-    """Ask the writer model for intent fields. Raises WriterError on failure."""
+    """Ask the writer model for intent fields. Raises WriterError on failure.
+
+    ``api_key`` is the bearer sent to ``base_url``. The local ``hermes
+    proxy`` accepts any non-empty bearer (it attaches your real credentials
+    itself); pass a real key only when pointing at OpenRouter directly.
+    """
     body = json.dumps(
         {
             "model": model,
@@ -68,7 +74,7 @@ def synthesize(
     req = urllib.request.Request(
         base_url.rstrip("/") + "/chat/completions",
         data=body,
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
