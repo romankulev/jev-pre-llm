@@ -33,7 +33,7 @@ def test_reads_last_decision():
         [
             {"outcome": "normal_llm", "reason": "x", "text": "hi", "ts": "t1", "mode": "shadow"},
             {"outcome": "would_short_circuit", "selected_handler": "check_tg",
-             "text": "чекни тг", "ts": "t2", "mode": "shadow"},
+             "text": "чекни тг", "ts": "t2", "mode": "shadow", "latency_ms": 1181},
             "garbage{{{",
         ],
         5,
@@ -41,6 +41,7 @@ def test_reads_last_decision():
     out = read_status(home)
     assert out["ok"] is True
     assert out["last"]["outcome"] == "would_short_circuit"
+    assert out["last"]["latency_ms"] == 1181
     assert out["last"]["selected_handler"] == "check_tg"
     assert out["trace_count"] == 5
 

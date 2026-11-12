@@ -53,6 +53,7 @@ def read_status(home: str | Path, plugin: str = "jev-pre-llm",
                     "selected_handler": str(record.get("selected_handler", ""))[:64],
                     "mode": str(record.get("mode", ""))[:16],
                     "ts": str(record.get("ts", ""))[:32],
+                    "latency_ms": int(record.get("latency_ms", 0) or 0),
                 }
                 break
         try:

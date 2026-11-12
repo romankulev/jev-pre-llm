@@ -121,21 +121,23 @@ either as a commit to this repo or into `handlers_dir`.
 
 ## LED indicator (desktop half)
 
-`desktop/plugin.js` is the desktop half of this unified package: a status-bar
-LED showing fast-path activity. Install it to
+`desktop/plugin.js` is the desktop half of this unified package: an intent
+roulette pane docked below the conversation. Install it to
 `$HERMES_HOME/desktop-plugins/jev-pre-llm/plugin.js` (folder name must match
 the plugin `id`), then ⌘K → Reload desktop plugins.
 
-- v1 (no backend needed): the LED follows turn atoms — dim when idle, pulsing
-  while the focused chat is working. It shows that *a* turn is running, not
-  yet which path it took.
+- v1 (no backend needed): the pane follows turn atoms — dim when idle, LEDs
+  cycling while the focused chat is working.
 - v2 (implemented): the Python backend (`dashboard/plugin_api.py`, auto-mounted
   at `/api/plugins/jev-pre-llm/` via `dashboard/manifest.json`) serves
-  `GET status` — the last decision tailed from `decisions.jsonl` plus the
-  trace size. The LED polls it every 5s (`ctx.rest`, polling fallback kept
-  because `ctx.socket` is a no-op on OAuth remotes): a fresh `short_circuit`
-  or `would_short_circuit` lights the dot solid and names the intent in the
-  tooltip. This makes `shadow` mode visible — exactly what live testing needs.
+  `GET status` — the last decision (outcome, handler, mode, latency) tailed
+  from `decisions.jsonl`, the trace count, and the enabled intent list.
+  The pane polls it every 3s (`ctx.rest`; polling kept because `ctx.socket`
+  is a no-op on OAuth remotes): while the solver is choosing, one LED per
+  intent lights up in slow rotation (~450 ms per LED); a fresh
+  `short_circuit` or `would_short_circuit` freezes the winner solid and names
+  it for 5 seconds, then everything fades to idle. The LLM thinking afterwards
+  never touches the LEDs.
 
 ## Intent miner (self-learning)
 

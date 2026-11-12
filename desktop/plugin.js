@@ -1,32 +1,33 @@
 /**
- * jev-pre-llm intent roulette — one LED per intent.
+ * jev-pre-llm intent roulette — one LED per intent, under the chat.
  *
  * Install: copy this file to
  *   $HERMES_HOME/desktop-plugins/jev-pre-llm/plugin.js
  * (folder name must match the plugin id), then Cmd/Ctrl+K →
  * "Reload desktop plugins". Plain ESM, loaded uncompiled.
  *
- * While the solver is choosing, the dots spin like a roulette (pure CSS,
- * one dot per enabled intent from the backend). The winner lights solid
- * and is named in the chip for a few seconds, then everything fades back
- * to idle. The LLM thinking afterwards never touches the LEDs.
+ * A pane docked below the conversation. While the solver is choosing,
+ * the LEDs light one by one, slowly (pure CSS, one LED per enabled
+ * intent from the backend). The winner stays lit and is named in large
+ * text for a few seconds, then everything fades back to idle.
+ * The LLM thinking afterwards never touches the LEDs.
  */
 
 import { atom, haptic, host, Tip, useValue } from '@hermes/plugin-sdk'
-import { jsx } from 'react/jsx-runtime'
+import { jsx, jsxs } from 'react/jsx-runtime'
 
 const ID = 'jev-pre-llm'
 const POLL_MS = 3000
 const ROULETTE_MS = 6000
-const WINNER_MS = 4000
+const WINNER_MS = 5000
 const FRESH_MS = 20000
-const STEP_MS = 180
+const STEP_MS = 450
 
-const CYCLE_CSS = '@keyframes jpl-cycle{0%,100%{opacity:.2}12%{opacity:1}}'
+const CYCLE_CSS = '@keyframes jpl-cycle{0%,100%{opacity:.2}15%{opacity:1}}'
 
 const statusAtom = atom({ last: null, enabled: [], trace_count: 0, backend: false })
 const turn = { active: false, start: 0 }
-const winner = { id: null, outcome: null, ts: 0 }
+const winner = { id: null, outcome: null, latency: 0, ts: 0 }
 
 function pollStatus(ctx) {
   ctx.rest('/status', { timeoutMs: 4000 }).then(
@@ -45,6 +46,7 @@ function pollStatus(ctx) {
           if (last.outcome === 'short_circuit' || last.outcome === 'would_short_circuit') {
             winner.id = last.selected_handler
             winner.outcome = last.outcome
+            winner.latency = last.latency_ms || 0
             winner.ts = Date.now()
           }
         }
@@ -54,7 +56,7 @@ function pollStatus(ctx) {
   )
 }
 
-function RouletteChip() {
+function RoulettePane() {
   const busy = useValue(host.state.busy)
   const status = useValue(statusAtom)
 
@@ -71,41 +73,48 @@ function RouletteChip() {
   const dots = status.enabled.length > 0 ? status.enabled : ['fast-path']
   const period = (dots.length * STEP_MS) / 1000
 
-  let tip
-  if (showWinner) tip = `jev-pre-llm: ${winner.outcome} → ${winner.id}`
-  else if (spinning) tip = 'jev-pre-llm: solver is choosing…'
-  else if (status.backend) tip = `jev-pre-llm: idle (traces: ${status.trace_count})`
-  else tip = 'jev-pre-llm: idle (backend unreachable)'
+  let headline
+  if (showWinner) headline = `${winner.id}  ·  ${winner.outcome} (${winner.latency} ms)`
+  else if (spinning) headline = 'solver is choosing…'
+  else if (status.backend) headline = `idle — ${status.trace_count} traced turns`
+  else headline = 'idle — backend unreachable'
 
-  return jsx(Tip, {
-    label: tip,
-    children: jsx('button', {
-      type: 'button',
-      className: 'inline-flex h-full items-center gap-1.5 px-1.5 text-[0.6875rem] text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)',
-      onClick: () => {
-        haptic('tap')
-        host.notify({ kind: 'info', message: tip })
-      },
-      children: [
-        jsx('style', { children: CYCLE_CSS }),
-        ...dots.map((id, i) => jsx('span', {
+  return jsxs('div', {
+    className: 'flex h-full flex-col justify-center gap-2 px-4 py-2',
+    children: [
+      jsx('style', { children: CYCLE_CSS }),
+      jsxs('div', {
+        className: 'flex items-end gap-5',
+        children: dots.map((id, i) => jsxs('div', {
           key: id,
-          title: id,
-          style: {
-            width: '8px',
-            height: '8px',
-            borderRadius: '9999px',
-            background: showWinner
-              ? (id === winner.id ? 'var(--ui-accent)' : 'var(--ui-text-quaternary)')
-              : 'var(--ui-accent)',
-            opacity: showWinner ? 1 : undefined,
-            animation: spinning ? `jpl-cycle ${period}s linear infinite` : 'none',
-            animationDelay: spinning ? `${-(i * STEP_MS) / 1000}s` : '0s'
-          }
-        })),
-        jsx('span', { children: showWinner ? winner.id : 'fast-path' })
-      ]
-    })
+          className: 'flex flex-col items-center gap-1',
+          children: [
+            jsx('span', {
+              title: id,
+              style: {
+                width: '14px',
+                height: '14px',
+                borderRadius: '9999px',
+                background: showWinner
+                  ? (id === winner.id ? 'var(--ui-accent)' : 'var(--ui-text-quaternary)')
+                  : 'var(--ui-accent)',
+                opacity: showWinner ? 1 : undefined,
+                animation: spinning ? `jpl-cycle ${period}s linear infinite` : 'none',
+                animationDelay: spinning ? `${-(i * STEP_MS) / 1000}s` : '0s'
+              }
+            }),
+            jsx('span', {
+              className: 'text-[0.6875rem] text-(--ui-text-tertiary)',
+              children: id
+            })
+          ]
+        }))
+      }),
+      jsx('div', {
+        className: 'text-xs text-(--ui-text-secondary)',
+        children: headline
+      })
+    ]
   })
 }
 
@@ -114,15 +123,16 @@ export default {
   name: 'jev-pre-llm roulette',
   register(ctx) {
     ctx.i18n.register({
-      en: { chipTip: 'jev-pre-llm intent roulette' }
+      en: { paneTitle: 'intent roulette' }
     })
     pollStatus(ctx)
     setInterval(() => pollStatus(ctx), POLL_MS)
     ctx.register({
-      id: 'led',
-      area: 'statusBar.right',
-      order: 130,
-      render: () => jsx(RouletteChip, {})
+      id: 'pane',
+      area: 'panes',
+      title: 'intent roulette',
+      data: { placement: 'bottom', dock: { pane: 'workspace', pos: 'bottom' }, height: '132px' },
+      render: () => jsx(RoulettePane, {})
     })
   }
 }
