@@ -24,3 +24,4 @@ config_schema:
   handler_timeout_seconds: {type: float, default: 120.0, description: "Handler code timeout"}
   max_input_chars: {type: int, default: 4000, description: "Maximum candidate input length"}
   enabled_handlers: {type: list, default: [], description: "Handler IDs from handlers/ dir"}
+  handlers_dir: {type: str, default: "~/.hermes/jev-intents", description: "External user-intent dir, survives plugin updates"}

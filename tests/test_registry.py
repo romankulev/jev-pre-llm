@@ -8,7 +8,9 @@ import re
 import sys
 from pathlib import Path
 
-HANDLERS = Path(__file__).resolve().parent.parent / "handlers"
+HANDLERS = Path(sys.argv[1]).expanduser() if len(sys.argv) > 1 else (
+    Path(__file__).resolve().parent.parent / "handlers"
+)
 
 
 def _load(path: Path):
