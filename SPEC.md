@@ -32,7 +32,7 @@ The solver is a replaceable module with one contract:
 - input: `text`, a list of `{id, criteria}`;
 - output: `{id | "normal_llm", confidence, go}`.
 
-Current: `solver_jev.py` (Jev via OpenRouter). Fallback: any cheap LLM with
+Current: `jpl/solver.py` (Jev via OpenRouter). Fallback: any cheap LLM with
 the same JSON output. Handlers and gates do not depend on the solver.
 
 ## Plugin rules
@@ -69,8 +69,10 @@ Required:
 - `CRITERIA` — one line for the solver. State how it differs from its
   neighbours, not a standalone description ("overall unread summary" vs "one
   named person"). Overlapping criteria confuse the classifier.
-- `run(text, ctx) -> str` — reads and computation only. An intent needing a
-  named entity (person, chat, file) extracts it inside `run`; on a miss raise
+- `run(text, ctx) -> str` — reads and computation only. `ctx` carries
+  `status`, `handler_timeout`, and `tg` (shared Telegram access — no
+  credential hunting inside handlers). An intent needing a
+   named entity (person, chat, file) extracts it inside `run`; on a miss raise
   `ValueError` and the turn falls through to the LLM. On failure raise
   `ValueError` — never an empty answer, never a fabrication.
 
@@ -85,13 +87,16 @@ destructive phrase, a live `run`, one full middleware pass in `shadow`.
 ```
 plugin.yaml            manifest (provides_middleware: [llm_execution], v1)
 SPEC.md                this file — the rules
-solver_jev.py          Jev-based solver (contract above)
-pipeline.py            gate → solver → run → answer/telemetry
+__init__.py            directory-plugin entrypoint (exposes register)
+jpl/                   core: gate → text → solver → loader → runtime
+jpl/tg.py              shared Telegram access, injected as ctx["tg"]
+telegram_fetch.py      Telegram fetch via Telethon (same session as the MCP)
+handlers/              stock intents (check_tg, tg_person, fp_status)
 handlers/_template.py  intent template
 handlers/README.md     intent cheat sheet
 desktop/plugin.js      LED indicator (desktop half, see below)
 drafts/                proposed self-learned intents (see miner section)
-tests/                 registry and gate self-checks
+tests/                 registry, gate, and claim self-checks
 ```
 
 ## Where intents live (update safety)
